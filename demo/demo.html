@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OmyDs TUI Demo — 全套终端界面复刻</title>
+<style>
+  :root{
+    --bg:#0b0e14; --term:#05070d; --fg:#d6e2f0; --dim:#5a6b85;
+    --blue:#4da3ff; --green:#3ddc84; --yellow:#ffd75e; --red:#ff5c5c;
+    --cyan:#6ee7e0; --magenta:#c792ea; --border:#223047;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(ellipse at 50% 30%, #101826 0%, var(--bg) 60%, #060a12 100%);
+    font-family:"Cascadia Code","JetBrains Mono","Fira Code","Sarasa Mono SC","Noto Sans Mono CJK SC",ui-monospace,Consolas,monospace;
+    color:var(--fg); display:flex; flex-direction:column; align-items:center; padding:18px 12px;
+  }
+  header{width:100%;max-width:980px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+  header h1{font-size:15px;color:var(--blue);letter-spacing:1px}
+  header h1 .lite{color:var(--dim);font-weight:400;font-size:12px}
+  header .meta{font-size:11px;color:var(--dim)}
+  header .meta b{color:var(--yellow);font-weight:600}
+  .frame{
+    width:100%; max-width:980px; flex:1; min-height:560px;
+    background:var(--term); border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 0 0 1px #000, 0 20px 60px rgba(0,0,0,.55), inset 0 0 120px rgba(20,40,80,.12);
+    display:flex; flex-direction:column; overflow:hidden; position:relative;
+  }
+  .titlebar{
+    display:flex; align-items:center; gap:8px; padding:7px 12px;
+    background:#0d1320; border-bottom:1px solid var(--border); font-size:11px; color:var(--dim);
+    user-select:none;
+  }
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
+  .titlebar .t{margin-left:8px}
+  .titlebar .modechip{margin-left:auto;border:1px solid var(--border);padding:1px 8px;border-radius:20px;font-size:10px}
+  #screen{
+    flex:1; overflow-y:auto; padding:14px 16px 6px; font-size:13px; line-height:1.62;
+    white-space:pre-wrap; word-break:break-all; cursor:text; scrollbar-width:thin; scrollbar-color:#2a3a55 transparent;
+  }
+  #screen::-webkit-scrollbar{width:8px}
+  #screen::-webkit-scrollbar-thumb{background:#2a3a55;border-radius:4px}
+  .inputbar{
+    display:flex; align-items:center; gap:0; padding:10px 16px 14px; font-size:13px;
+    border-top:1px solid #131c2c; background:rgba(10,16,28,.6);
+  }
+  .prompttag{color:var(--green);font-weight:700}
+  .prompttag.ask{color:var(--yellow)}
+  .prompttag.danger{color:var(--red)}
+  .caret{color:var(--blue)}
+  #input{
+    flex:1; background:transparent;border:none;outline:none;color:var(--fg);
+    font:inherit; caret-color:var(--blue); margin-left:8px; position:relative;
+  }
+  .ghost{position:relative;pointer-events:none}
+  .sugg{
+    position:absolute; left:0; top:100%; color:var(--dim); font-size:11px; white-space:nowrap;
+    padding-top:2px; display:none;
+  }
+  .sugg b{color:var(--yellow);font-weight:600}
+  .crt::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0 1px, transparent 1px 3px);
+    mix-blend-mode:overlay;
+  }
+  .cursor{display:inline-block;width:8px;height:15px;background:var(--blue);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  /* semantic spans */
+  .logo{color:var(--blue);text-shadow:0 0 8px rgba(77,163,255,.45)}
+  .b{color:var(--blue)} .g{color:var(--green)} .y{color:var(--yellow)}
+  .r{color:var(--red)} .c{color:var(--cyan)} .m{color:var(--magenta)} .d{color:var(--dim)}
+  .w{color:var(--fg)} .bold{font-weight:700}
+  .err{color:var(--red)}
+  .okline{color:var(--green)}
+  .panel{border:1px solid var(--yellow);border-radius:4px;padding:8px 12px;margin:6px 0;display:inline-block;max-width:92%}
+  .panel .ttl{color:var(--yellow);font-weight:700;margin-bottom:4px}
+  .panel .sub{color:var(--dim);font-size:11px;margin-top:4px}
+  .panel .row b{color:var(--fg)}
+  .panel .row .val{color:var(--yellow)}
+  .memtag{background:rgba(61,220,132,.12);border:1px solid rgba(61,220,132,.4);color:var(--green);border-radius:3px;padding:0 6px;display:inline-block;margin:2px 0}
+  .sysline{color:#8be28b}
+  .md-h{color:var(--blue);font-weight:700}
+  .md-code{color:var(--cyan);background:#101828;border:1px solid #1d2a40;border-radius:3px;padding:0 4px}
+  .md-codeblock{color:var(--cyan);background:#0a101c;border-left:3px solid #233;padding-left:10px;display:block;margin:4px 0;white-space:pre-wrap}
+  .md-bold{color:#fff;font-weight:700}
+  table{border-collapse:collapse;margin:6px 0;font-size:12.5px}
+  td,th{border:1px solid #1d2a40;padding:3px 14px 3px 8px}
+  th{color:var(--blue);text-align:left}
+  td:first-child{color:var(--yellow)}
+  .statusbar{color:var(--dim);font-size:11px;padding:4px 16px 10px;display:flex;gap:16px}
+  .statusbar .live{color:var(--green)}
+  footer{max-width:980px;width:100%;font-size:11px;color:var(--dim);margin-top:10px;line-height:1.7}
+  footer a{color:var(--blue);text-decoration:none}
+  .kbd{border:1px solid #2a3a55;border-radius:3px;padding:0 5px;font-size:10px;color:var(--fg);background:#101828}
+  @media (max-width:640px){ #screen{font-size:11.5px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>OmyDs <span class="lite">— TUI 全套界面演示（源码级复刻，非真实模型）</span></h1>
+  <div class="meta">复刻自 <b>v0.1.9.12</b> · <span class="g">prompt_toolkit + Rich</span> 风格 · <span class="c">MIT</span></div>
+</header>
+
+<div class="frame crt">
+  <div class="titlebar">
+    <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+    <span class="t">ubuntu@dev: ~/OmyDs — uv run OmyDs</span>
+    <span class="modechip" id="chip">workspace</span>
+  </div>
+  <div id="screen"></div>
+  <div class="inputbar">
+    <span class="prompttag" id="ptag">[workspace]</span><span class="caret">&gt;&gt;</span>
+    <div class="ghost" style="flex:1">
+      <input id="input" autocomplete="off" spellcheck="false" placeholder="">
+      <span class="sugg" id="sugg"></span>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span>◆ 演示脚本内置，可自由输入；模型回复为预置剧本</span>
+    <span class="live" id="stat">菜单</span>
+    <span id="rootstat">workspace: …/OmyDs/sandbox</span>
+  </div>
+</div>
+
+<footer>
+  快速导览：直接发消息让助手建文件 → 观察 <span class="y">工具面板（purpose/impact）</span> 与权限判定；
+  输入 <span class="kbd">/help</span> <span class="kbd">/permissions ask</span> <span class="kbd">/danger-full</span> <span class="kbd">/safe</span>
+  <span class="kbd">/set-project-root-in ~/notes</span> <span class="kbd">/history</span> <span class="kbd">/return</span> 体验全套命令；
+  让它"记住我叫阿棠"触发 <span class="g">[MEMORY:]</span> 记忆提取；越界读 <span class="m">~/.ssh/id_rsa</span> 会被敏感文件名单拦截。
+  源码调研报告见页面底部对话彩蛋 · <a href="https://github.com/t9rw485q5v-star/OmyDs" target="_blank">github.com/t9rw485q5v-star/OmyDs</a>
+</footer>
+
+<script>
+/* ============ OmyDs TUI simulation — logic mirrors omyds/*.py ============ */
+const screen = document.getElementById('screen');
+const input  = document.getElementById('input');
+const suggEl = document.getElementById('sugg');
+const ptag   = document.getElementById('ptag');
+const chip   = document.getElementById('chip');
+const stat   = document.getElementById('stat');
+const rootstat = document.getElementById('rootstat');
+
+const MODES = { /* permissions.py */
+  'workspace':   {label:'工作区自动 · 命令隔离 · 命令断网', cls:'g'},
+  'ask':         {label:'逐次确认 · 命令隔离 · 命令断网', cls:'y'},
+  'danger-full': {label:'DANGER-FULL · 宿主机 · 当前用户权限 · 可联网', cls:'r'},
+};
+const LOGO = [
+' ██████╗ ███╗   ███╗██╗   ██╗██████╗ ███████╗',
+'██╔═══██╗████╗ ████║╚██╗ ██╔╝██╔══██╗██╔════╝',
+'██║   ██║██╔████╔██║ ╚████╔╝ ██║  ██║███████╗',
+'██║   ██║██║╚██╔╝██║  ╚██╔╝  ██║  ██║╚════██╗',
+'╚██████╔╝██║ ╚═╝ ██║   ██║   ██████╔╝███████║',
+' ╚═════╝ ╚═╝     ╚═╝   ╚═╝   ╚═════╝ ╚══════╝',
+];
+let state = {
+  mode:'workspace', root:'/home/ubuntu/OmyDs/sandbox', inConversation:false,
+  dirty:false, messages:[], hist:[], pending:false, busy:false, dangerArmed:false,
+};
+
+const COMMANDS = ['/help','/history','/return','/retry','/permissions ','/safe',
+                  '/danger-full','/set-project-root-in ','/reset-project-root'];
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+/* ui.plain(): neutralize control chars & bidi overrides like the real client */
+const plain = s => String(s).replace(/[\u202a-\u202e\u2066-\u2069]/g,'Ⓞ').replace(/\x1b/g,'␛');
+
+function line(html, cls=''){
+  const d=document.createElement('div'); if(cls)d.className=cls;
+  d.innerHTML=html; screen.appendChild(d); screen.scrollTop=screen.scrollHeight; return d;
+}
+function say(text, cls='', style=''){ return line(`<span class="${style}">${esc(plain(text))}</span>`, cls); }
+const FAST = (typeof window !== 'undefined') && window.__OMYDS_FAST__ === true;
+const sleep = FAST ? () => Promise.resolve() : ms => new Promise(r=>setTimeout(r,ms));
+
+async function typeOut(text, cls='', style='w', cps=2){
+  const d = line('', cls); let buf='';
+  for(const ch of plain(text)){
+    buf += ch==='`' ? '' : ch;
+    d.innerHTML = `<span class="${style}">${md(buf)}</span>`;
+    screen.scrollTop = screen.scrollHeight;
+    await sleep('`'.includes(ch)?0:cps);
+  }
+  return d;
+}
+/* tiny markdown renderer like rich.Markdown */
+function md(t){
+  t = esc(t);
+  t = t.replace(/```([\s\S]*?)```/g, (_,c)=>`<span class="md-codeblock">${c.replace(/^\n|\n$/g,'')}</span>\n`);
+  t = t.replace(/`([^`\n]+)`/g,'<span class="md-code">$1</span>');
+  t = t.replace(/\*\*([^*\n]+)\*\*/g,'<span class="md-bold">$1</span>');
+  t = t.replace(/^### (.*)$/gm,'<span class="md-h">$1</span>');
+  t = t.replace(/^## (.*)$/gm,'<span class="md-h">$1</span>');
+  return t;
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  stat.textContent='启动中';
+  const l = line('','logo');
+  for(const row of LOGO){ l.innerHTML += row+'\n'; await sleep(46); screen.scrollTop=screen.scrollHeight; }
+  await sleep(180);
+  say('\n--- OmyDs v0.1.9.12 ---','b','bold');
+  await sleep(120);
+  const sessions = ['daily-notes','sandbox-test'];
+  sessions.forEach((s,i)=> say(`  ${i+1}. ${s}`,'w'));
+  say('  0. 新建对话','w'); say('  q. 退出','w');
+  say('请选择（默认 0）：','d');
+  stat.textContent='菜单';
+}
+
+/* ---------- greeting / agent.md ---------- */
+const GREETING = `在开始之前，请记住这三点共识（你可以随时在 greet.toml 中关闭它）：
+1. 尊重他人的隐私。
+2. 输入之前先思考。
+3. 能力越大，责任越大。`;
+
+function showPermissions(detailed=false){
+  const m = MODES[state.mode];
+  say(`模式: ${m.label}`, '', m.cls);
+  say(`工作区: ${state.root}`, '', 'g');
+  if(detailed){
+    if(state.mode==='danger-full'){
+      say('工作区仅决定初始目录，不限制访问范围。/safe 切回隔离；不会自动使用 sudo。','d');
+    }else{
+      say('工作区是真实可写目录（含隐藏文件），不是副本；工具可以删除其中的数据。','d');
+      say('命令仅挂载该目录与只读系统运行库，隔离网络；越界文件访问需单次确认。','d');
+    }
+  }
+}
+
+async function enterConversation(name){
+  state.inConversation = true; state.dirty=false; state.pending=false;
+  state.messages = [{role:'system',content:'(system prompt: agent.md + 长期记忆)'}];
+  refreshPrompt();
+  say('');
+  say('=== 欢迎来到 OmyDs~ ===','','b');
+  await sleep(90);
+  await typeOut(GREETING,'','d',1);
+  say('已进入对话。/help 查看帮助，/return 返回菜单，exit 退出。','w');
+  showPermissions();
+  if(name) say(`（已加载会话：${esc(name)}）`,'d');
+  else say('（新建会话。试试输入：帮我在当前工作区创建 todo.md，写下今晚的计划）','d');
+  stat.textContent='对话';
+}
+
+function refreshPrompt(){
+  ptag.textContent = `[${state.mode}]`;
+  ptag.className = 'prompttag' + (state.mode==='ask'?' ask':state.mode==='danger-full'?' danger':'');
+  chip.textContent = state.mode;
+  chip.style.color = state.mode==='danger-full'?'var(--red)':state.mode==='ask'?'var(--yellow)':'var(--green)';
+  rootstat.textContent = 'workspace: ' + state.root;
+}
+
+/* ---------- tool layer (mirrors tool_executor.py + security.py) ---------- */
+const FORBIDDEN = ['config.toml','.env','.ssh','.gnupg','id_rsa','id_ed25519','agent.md'];
+function pathCheck(p){
+  const outside = !p.startsWith(state.root);
+  if(FORBIDDEN.some(f=>p.includes(f))) return {ok:false, why:'single-sensitive', outside};
+  if(p.endsWith('.key')||p.endsWith('.pem')) return {ok:false, why:'single-sensitive', outside};
+  if(/^\/(etc|proc|sys|dev|boot|usr|bin|sbin|lib|lib64|root)\b/.test(p)) return {ok:false, why:'system', outside};
+  return {ok:true, outside};
+}
+function panel(name,args,root,mode,outside){
+  const rows = [['工具',name],['目的',args.purpose],['预计影响',args.impact]];
+  if(name==='run_command'){ rows.push(['目录',root],['命令',args.command]); }
+  else{
+    rows.push(['路径',args.path]);
+    if(outside) rows.push(['范围','工作区外']);
+    if(name==='write_file') rows.push(['操作',args.mode==='append'?'追加到文件末尾':'覆盖整个文件'],['长度',`${args.content.length} 字符`]);
+    if(name==='read_file') rows.push(['操作','读取内容并回传给模型服务']);
+  }
+  let html = `<div class="panel"><div class="ttl">${esc(name)} · ${esc(mode)}</div>`;
+  for(const [k,v] of rows) html += `<div class="row"><b>${esc(k)}: </b><span class="val">${esc(plain(v))}</span></div>`;
+  html += `<div class="sub">目的与预计影响由模型说明</div></div>`;
+  line(html);
+}
+let lastWrite=null;
+async function confirmTool(name){
+  while(true){
+    const opt = name==='write_file' ? '[y/N，v查看全文]' : '[y/N]';
+    const c = await askInline(`允许本次操作？${opt} `);
+    if(c==='v' && name==='write_file' && lastWrite){
+      await typeOut(lastWrite.content,'','c',1);
+      line('<span class="d">（输入 y 或 N 继续）</span>');
+      continue;
+    }
+    return c==='y';
+  }
+}
+async function executeTool(call){
+  const {name, args} = call;
+  /* outside is determined by the client (resolve_path + pathCheck), never trusted from model args */
+  if(name==='read_file'||name==='write_file'){
+    let p = String(args.path||'');
+    if(p.startsWith('~')) p = '/home/ubuntu/' + p.slice(1).replace(/^\/+/, '');
+    else if(!p.startsWith('/')) p = state.root.replace(/\/$/, '') + '/' + p;   // relative → workspace
+    args.path = p;
+    args.outside = pathCheck(p).outside;
+  }
+  panel(name,args,state.root,state.mode,args.outside);
+  let needs = false;
+  if(state.mode!=='danger-full'){
+    needs = args.outside || (state.mode==='ask' && ['run_command','write_file'].includes(name));
+  }
+  if(needs){
+    if(name==='write_file'){ lastWrite=args; say('写入预览:','y'); await typeOut(args.content.slice(0,2000),'','w',1);
+      if(args.content.length>2000) say('（已截断；输入 v 查看完整内容）','d'); }
+    const ok = await confirmTool(name);
+    if(!ok) return '用户拒绝了本次操作，未执行。不要重复请求或改用其他工具绕过拒绝；请说明替代方案，或提供代码供用户自行执行，等待新的明确指示。';
+  }
+  /* validate_path: sensitive/system boundaries hold even after approval (security.py) */
+  if(name==='read_file'||name==='write_file'){
+    const chk = pathCheck(args.path);
+    if(!chk.ok && (args.outside || state.mode==='danger-full'))
+      return chk.why==='single-sensitive'
+        ? '错误：单次越界授权不包含此敏感文件；请手动处理'
+        : '错误：工作区模式不允许访问系统目录';
+  }
+  /* simulate real effects */
+  if(name==='run_command'){
+    await sleep(500);
+    if(args.command.includes('todo.md')||args.command.includes('ls')) return '退出码: 0\ntodo.md\nnotes.txt';
+    if(args.command.includes('curl')||args.command.includes('wget')){
+      if(state.mode==='danger-full') return '退出码: 0\n<!doctype html><html><body>example.com</body></html>';
+      return '命令未成功执行：bwrap --unshare-all 已禁用网络（不会自动解除隔离或提权）';
+    }
+    return '退出码: 0\n（无输出）';
+  }
+  if(name==='read_file'){
+    await sleep(300);
+    return '# 今晚计划\n- 复盘 OmyDs 源码\n- 散步 30 分钟\n- 23:30 前睡觉';
+  }
+  if(name==='write_file'){
+    await sleep(300);
+    return (args.mode==='append'?'追加写入成功。':'覆盖写入成功。');
+  }
+  return '（工具已执行）';
+}
+
+/* ---------- scripted assistant replies ---------- */
+function scriptFor(text, memoryHits){
+  const t = text.toLowerCase();
+  if(/记住|我叫|我是/.test(text)) return {
+    content:'收到！已经把这件事写进长期记忆了（~/.omyds/memory.md），下次进入会话我会记得。\n\n[MEMORY: 用户自称"阿棠"，是 OmyDs 的调研者]',
+    tool:null };
+  /* read intent wins over the word "todo" — mirrors real routing priority */
+  if(/读|查看|打开/.test(t) && /todo|文件|md|notes/.test(t)) return {
+    content:'',
+    tool:{name:'read_file', args:{path:'todo.md', purpose:'读取 todo.md 确认写入内容', impact:'只读操作，读取工作区内 todo.md，不联网'}},
+    after:'文件内容确认无误：**今晚计划三项**，均未勾选。要我帮你追加一条吗？'};
+  if(/todo|计划|创建|新建|写.{0,4}文件|notes/.test(t)) return {
+    content:'',
+    tool:{name:'write_file', args:{path:'todo.md', content:'# 今晚计划\n- [ ] 复盘 OmyDs 源码\n- [ ] 散步 30 分钟\n- [ ] 23:30 前睡觉', mode:'overwrite',
+      purpose:'在当前工作区创建 todo.md，写入今晚的三项计划', impact:'创建新文件 todo.md（约 70 字符），不联网，不影响已有文件'}},
+    after:'已在工作区创建 `todo.md`，内容为今晚的三项计划。需要我读取确认或者补充事项吗？'};
+  if(/ls|列出|目录|ls -/.test(t)) return {
+    content:'',
+    tool:{name:'run_command', args:{command:'ls -la', purpose:'列出当前工作区文件', impact:'只读命令，在 bwrap 沙箱内断网执行'}},
+    after:'工作区当前有 `todo.md` 和 `notes.txt` 两个文件（沙箱内执行，命令断网）。'};
+  if(/ssh|id_rsa|凭据|密钥/.test(t)) return {
+    content:'',
+    tool:{name:'read_file', args:{path:'~/.ssh/id_rsa', purpose:'读取用户 SSH 私钥', impact:'读取工作区外的敏感凭据文件，不联网'}},
+    after:'（模型试图越界读取敏感文件）我无法读取这个文件——客户端把它列入了敏感名单，即使单次越界确认也不放行。'};
+  if(/etc|passwd|系统/.test(t)) return {
+    content:'',
+    tool:{name:'read_file', args:{path:'/etc/passwd', purpose:'读取系统账户列表', impact:'读取工作区外的系统目录文件'}},
+    after:'（模型试图访问系统目录）被 `security.check_policy` 直接拦截：工作区模式不允许访问系统目录。'};
+  if(/联网|curl|下载|网络/.test(t)) return {
+    content:'',
+    tool:{name:'run_command', args:{command:'curl https://example.com', purpose:'测试沙箱是否真的断网', impact:'将尝试联网（预计会被沙箱拦截）'}},
+    after:'命令已执行但失败——`bwrap --unshare-all` 让命令进程完全断网，这正是「隔离失败不回退宿主机」的设计。'};
+  if(/评价|调研|亮点|缺陷|技术栈|你怎么看|报告/.test(t)) return {
+    content:'### 调研快报（模拟模型口吻）\n**技术栈**：Python 3.11 + uv，openai SDK 对接 DeepSeek，prompt_toolkit 输入层，Rich 渲染层，bwrap/setpriv 做执行隔离。全项目约 1000 行。\n**亮点**：权限与模型解耦（模式只存客户端）；强制 purpose/impact 注解；工具调用-结果整轮裁剪；敏感文件名单；原子写入（tempfile + os.replace）。\n**缺陷**：仅 Linux；无测试目录入库；记忆全文注入上下文；单字符预算裁剪；npm 式依赖极少意味着生态单薄。\n细节请看页面底部报告。',
+    tool:null };
+  return {
+    content:'（演示剧本）我已收到消息。这个 demo 的回复是预置剧本，用于展示 **Markdown 渲染、配色与 `行内代码`** 等界面行为。\n试试：让我创建 todo.md、让我记住你的名字、/permissions ask、/danger-full、或让我读 ~/.ssh/id_rsa。',
+    tool:null };
+}
+
+/* ---------- runtime context injection (context.py) ---------- */
+function runtimeContext(){
+  return JSON.stringify({
+    workspace: state.root,
+    permission_mode: state.mode,
+    command_execution: state.mode==='danger-full' ? 'host, current user' : 'bwrap sandbox',
+    command_network: state.mode==='danger-full' ? 'host network' : 'disabled',
+    sudo: 'not available; no automatic elevation',
+  }, null, 1);
+}
+
+/* ---------- main loop ---------- */
+async function runTurn(text){
+  const thinking = line('<span class="d">思考中…</span>');
+  await sleep(650);
+  thinking.remove();
+  const sc = scriptFor(text);
+  state.messages.push({role:'assistant', content:sc.content});
+  if(sc.tool){
+    say('OmyDs >','','b');
+    line(`<span class="y">  调用工具: ${esc(sc.tool.name)}</span>`);
+    const result = await executeTool(sc.tool);
+    state.messages.push({role:'tool', content:result});
+    await sleep(150);
+    if(result.startsWith('用户拒绝')) await typeOut(result,'','d',1);
+    else if(result.startsWith('错误')) await typeOut(result,'','d',1);
+    else await typeOut(result.slice(0,300),'','c',1);
+    await sleep(250);
+    await typeOut(sc.after,'','w');
+    state.dirty=true; return true;
+  }
+  let content = sc.content;
+  /* memory extraction, mirrors storage.extract_and_save_memory */
+  const mre = /[\[【]\s*MEMORY:\s*(.*?)\s*[\]】]/s;
+  const mm = content.match(mre);
+  if(mm){
+    const mem = mm[1].trim();
+    content = content.replace(mre,'').trim();
+    await typeOut(content,'','w');
+    line(`<span class="sysline">[系统：已更新长期记忆 -> ${esc(mem)}]</span>`);
+    line(`<span class="memtag">memory.md += 「${esc(mem)}」</span>`);
+    state.dirty=true; return true;
+  }
+  await typeOut(content,'','w');
+  state.dirty=true; return true;
+}
+
+async function showHistory(){
+  say('\n=== 当前会话历史 ===','','b bold');
+  for(const m of state.messages){
+    if(m.role==='system') continue;
+    if(m.role==='user'){ say('\n你 >','','g'); say(m.content,'w'); }
+    else if(m.role==='assistant'){
+      say('\nOmyDs >','','b');
+      if(m.content) line(md(m.content));
+    } else if(m.role==='tool'){
+      say('\n工具结果 >','','y');
+      let c = m.content.length>4000? m.content.slice(0,4000)+'\n（工具结果显示已截断）' : m.content;
+      say(c,'d');
+    }
+  }
+  say('=== 历史结束 ===','d');
+}
+
+async function helpTable(){
+  line(`<table><tr><th>命令</th><th>说明</th></tr>${[
+    ['/help','显示帮助'],['/history','查看会话历史'],['/return','返回会话菜单'],
+    ['/retry','继续未完成的请求'],['/permissions','查看权限与工作区'],
+    ['/permissions ask','写入、命令逐次确认'],['/safe','工作区自动模式'],
+    ['/danger-full','宿主机模式（需确认）'],['/set-project-root-in &lt;路径&gt;','切换工作区'],
+    ['/reset-project-root','恢复默认工作区'],['exit / quit','退出程序'],
+  ].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table>`);
+  say('提示：切换目录不是切换权限。/safe 可随时恢复工作区模式。','d');
+}
+
+async function switchDanger(){
+  say('\n启用 DANGER-FULL','','bold r');
+  say(`当前目录: ${state.root}`,'','g');
+  say('解除工作区限制：可读写个人文件（含凭据）、修改 OmyDs、联网，不再逐次确认。','','r');
+  say('仅当前会话，不授予 sudo。/safe 切回；已执行的修改不会撤销。','d');
+  const c = await askInline('为本会话启用？[y/N] ');
+  if(c!=='y'){ say('未切换权限模式。','d'); return false; }
+  state.mode='danger-full'; refreshPrompt(); showPermissions(); return true;
+}
+
+async function setRoot(arg){
+  if(!arg){ say('用法：/set-project-root-in <路径>','d'); return; }
+  let p = arg.trim().replace(/^~\/?/, '/home/ubuntu/');
+  if(!p.startsWith('/')) p = '/home/ubuntu/OmyDs/' + p;
+  p = p.replace(/\/$/,'');
+  if(p.includes('OmyDs') && !p.includes('sandbox') && !p.includes('notes')){
+    say('切换失败：工作区不能包含 OmyDs 程序或其会话/记忆目录','err'); return;
+  }
+  state.root = p; refreshPrompt(); showPermissions();
+}
+
+/* ---------- inline yes/no prompt inside conversation flow ---------- */
+let inlineResolver = null;
+function askInline(promptText){
+  say(promptText, '', 'y');   // render prompt line like prompt_toolkit
+  return new Promise(res=>{
+    inlineResolver = res;
+    ptag.dataset.inline='1';
+    input.placeholder = promptText;
+    input.value=''; input.focus();
+    suggEl.style.display='none';
+    stat.textContent='等待确认';
+  });
+}
+
+/* ---------- slash suggestion (CommandAutoSuggest) ---------- */
+input.addEventListener('input', ()=>{
+  const t = input.value;
+  if(inlineResolver){ return; }
+  if(t.startsWith('/')){
+    const pool = COMMANDS.concat(state.hist);
+    const hit = pool.find(c=>c.startsWith(t) && c!==t);
+    if(hit){
+      suggEl.style.display='block';
+      suggEl.innerHTML = `<b>${esc(t)}</b>${esc(hit.slice(t.length))}`;
+    } else suggEl.style.display='none';
+  } else suggEl.style.display='none';
+});
+input.addEventListener('keydown', e=>{
+  if(e.key==='Tab'){
+    const t=input.value;
+    if(t.startsWith('/') && suggEl.style.display==='block'){
+      const pool = COMMANDS.concat(state.hist);
+      const hit = pool.find(c=>c.startsWith(t) && c!==t);
+      if(hit){ input.value=hit; e.preventDefault(); input.dispatchEvent(new Event('input')); }
+    }
+    e.preventDefault(); return;
+  }
+  if(e.key==='Enter'){ e.preventDefault(); submit(); }
+});
+
+async function submit(){
+  if(inlineResolver){
+    const r = inlineResolver; inlineResolver=null;
+    input.placeholder='';
+    say(`  ↳ ${esc(input.value)}`,'','d');
+    const v = input.value; input.value=''; r(v.trim().toLowerCase()); return;
+  }
+  if(state.busy) return;
+  const raw = input.value; input.value=''; suggEl.style.display='none';
+  if(!raw) return;
+  if(state.inConversation)
+    say(`[${state.mode}] >> ${esc(raw)}`,'', state.mode==='danger-full'?'r':state.mode==='ask'?'y':'g');
+  else
+    say(`>> ${esc(raw)}`,'','w');
+  if(raw.startsWith('/')) state.hist.push(raw);
+  else if(raw!=='') state.hist.push(raw);
+
+  /* menu layer */
+  if(!state.inConversation){
+    const c = raw.trim().toLowerCase();
+    if(['q','exit','quit'].includes(c)){ say('已退出。','','d'); stat.textContent='已退出'; return; }
+    if(c==='0'||c===''){ await enterConversation(null); return; }
+    if(/^\d+$/.test(c)){
+      const idx = +c;
+      if(idx >= 1 && idx <= 2){ await enterConversation(['daily-notes','sandbox-test'][idx-1]); }
+      else say('请输入有效序号。','d');
+      return;
+    }
+    say('请输入有效序号。','d'); return;
+  }
+
+  /* conversation layer (app.py conversation()) */
+  const [cmd, ...rest] = raw.split(' ');
+  const arg = rest.join(' ');
+  const lc = cmd.toLowerCase();
+  if(['/return','exit','quit'].includes(lc)){
+    if(state.dirty){
+      const c = await askInline('保存本次更改？[y/N/c取消返回] ');
+      if(c==='c'){ say('（返回对话）','d'); return; }
+      if(c==='y'){
+        let name = 'demo-session';
+        say('会话名称：demo-session','d');
+        await sleep(200);
+        line('<span class="okline">已保存。</span> <span class="d">→ ~/.omyds/sessions/demo-session.json（原子写入 tempfile + os.replace）</span>');
+        state.dirty = false;
+      }
+    }
+    if(lc==='/return'){ state.inConversation=false; stat.textContent='菜单'; await bootMenu(); }
+    else { state.inConversation=false; say('已退出。','','d'); stat.textContent='已退出'; }
+    return;
+  }
+  if(lc==='/help'){ await helpTable(); return; }
+  if(lc==='/history'){ await showHistory(); return; }
+  if(lc==='/permissions'){
+    const req = arg.trim();
+    if(!req){ showPermissions(true); return; }
+    if(!MODES[req]){ say('用法：/permissions ask|workspace|danger-full','d'); return; }
+    if(req===state.mode){ showPermissions(true); return; }
+    if(req==='danger-full'){ if(await switchDanger()) stat.textContent='对话'; return; }
+    state.mode=req; refreshPrompt(); showPermissions(); stat.textContent='对话'; return;
+  }
+  if(lc==='/safe'){ if(state.mode==='workspace'){ showPermissions(true); return; } state.mode='workspace'; refreshPrompt(); showPermissions(); stat.textContent='对话'; return; }
+  if(lc==='/danger-full'){ if(state.mode==='danger-full'){ showPermissions(true); return; } if(await switchDanger()) stat.textContent='对话'; return; }
+  if(lc==='/set-project-root-in'){ await setRoot(arg); return; }
+  if(lc==='/reset-project-root'){ state.root='/home/ubuntu/OmyDs/sandbox'; refreshPrompt(); showPermissions(); return; }
+  if(lc==='/retry'){
+    if(!state.pending){ say('没有本次运行中待继续的请求。','d'); return; }
+    state.pending=false; state.dirty=true;
+    say('（继续上次未完成的请求…）','d');
+    await sleep(400);
+    await typeOut('已继续：上次的工具结果都保留着，我不会重跑已执行的工具，直接接着上文的结论说。','','w');
+    return;
+  }
+  if(raw.startsWith('/')){ say('未知指令，请用 /help 查看。','d'); return; }
+
+  /* normal turn */
+  state.busy=true; input.disabled=false;
+  state.messages.push({role:'user', content:raw});
+  say(`<span class="d">[注入 system 上下文] ${esc(runtimeContext()).slice(0,120)}…</span>`);
+  const ok = await runTurn(raw);
+  state.pending = !ok;
+  state.busy=false;
+}
+
+async function bootMenu(){
+  say('\n--- OmyDs v0.1.9.12 ---','b bold');
+  say('  1. daily-notes','w'); say('  2. sandbox-test','w');
+  say('  0. 新建对话','w'); say('  q. 退出','w');
+  say('请选择（默认 0）：','d');
+  stat.textContent='菜单';
+}
+
+boot();
+input.focus();
+document.getElementById('screen').addEventListener('click',()=>input.focus());
+</script>
+
+<!-- 调研报告（页面彩蛋，随 demo 一起发布） -->
+<div style="display:none" id="research-report">
+## OmyDs 调研报告
+技术栈：Python 3.11+ / uv / openai SDK（DeepSeek） / prompt_toolkit / Rich / bwrap / setpriv。
+亮点：客户端持有权限、工具 purpose/impact 强制注解、整轮裁剪上下文、敏感文件黑名单、原子写、
+控制字符净化（plain()）、拒绝后防绕过话术、记忆标记零额外请求。
+缺陷：仅 Linux、无 CI/测试入库、记忆全文注入、字符预算非 token、无流式输出、生态极小（~1000 行）。
+</div>
+</body>
+</html>
